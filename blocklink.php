@@ -18,9 +18,9 @@
 * versions in the future. If you wish to customize PrestaShop for your
 * needs please refer to http://www.prestashop.com for more information.
 *
-*  @author PrestaShop SA <contact@prestashop.com>
-*  @copyright  2007-2014 PrestaShop SA
-*  @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+*  @author       PrestaShop SA <contact@prestashop.com>
+*  @copyright    2007-2014 PrestaShop SA
+*  @license      http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *  International Registered Trademark & Property of PrestaShop SA
 */
 
@@ -51,7 +51,7 @@ class BlockLink extends Module
 
 	public function install()
 	{
-		if (!parent::install() || !$this->registerHook('header'))
+		if (!parent::install() || !$this->registerHook('header') || !$this->registerHook('footer'))
 			return false;
 
 		$success = Configuration::updateValue('PS_BLOCKLINK_TITLE', array('1' => 'Block link', '2' => 'Bloc lien'));
@@ -112,7 +112,7 @@ class BlockLink extends Module
 		return true;
 	}
 
-	public function hookLeftColumn($params)
+	public function hookDisplayLeftColumn($params)
 	{
 		$links = $this->getLinks();
 
@@ -128,12 +128,28 @@ class BlockLink extends Module
 		return $this->display(__FILE__, 'blocklink.tpl');
 	}
 
-	public function hookRightColumn($params)
+	public function hookDisplayRightColumn($params)
 	{
-		return $this->hookLeftColumn($params);
+		return $this->hookDisplayLeftColumn($params);
 	}
 
-	public function hookHeader($params)
+	public function hookDisplayFooter($params)
+	{
+		$links = $this->getLinks();
+
+		$this->smarty->assign(array(
+			'blocklink_links' => $links,
+			'title' => Configuration::get('PS_BLOCKLINK_TITLE', $this->context->language->id),
+			'url' => Configuration::get('PS_BLOCKLINK_URL'),
+			'lang' => 'text_'.$this->context->language->id
+		));
+		if (!$links)
+			return false;
+
+		return $this->display(__FILE__, 'blocklinkfooter.tpl');
+	}
+
+	public function hookDisplayHeader($params)
 	{
 		$this->context->controller->addCSS($this->_path.'blocklink.css', 'all');
 	}
