@@ -55,10 +55,10 @@ class BlockLink extends Module
 			return false;
 
 		$success = Configuration::updateValue('PS_BLOCKLINK_TITLE', array('1' => 'Block link', '2' => 'Bloc lien'));
+		$success &= Configuration::updateValue('PS_BLOCKLINK_URL', array('1' => '', '2' => ''));
 		$success &= Db::getInstance()->execute('
 		CREATE TABLE '._DB_PREFIX_.'blocklink (
 		`id_blocklink` int(10) NOT NULL AUTO_INCREMENT,
-		`url` varchar(254) NOT NULL,
 		`new_window` TINYINT(1) NOT NULL,
 		PRIMARY KEY(`id_blocklink`))
 		ENGINE='._MYSQL_ENGINE_.' default CHARSET=utf8');
@@ -73,6 +73,7 @@ class BlockLink extends Module
 		`id_blocklink` int(10) NOT NULL,
 		`id_lang` int(10) NOT NULL,
 		`text` varchar(62) NOT NULL,
+		`url` varchar(254) NOT NULL,
 		PRIMARY KEY(`id_blocklink`, `id_lang`))
 		ENGINE='._MYSQL_ENGINE_.' default CHARSET=utf8');
 		if (!$success)
@@ -85,8 +86,7 @@ class BlockLink extends Module
 		// Hook the module either on the left or right column
 		$theme = new Theme(Context::getContext()->shop->id_theme);
 		if ((!$theme->default_left_column || !$this->registerHook('leftColumn'))
-			&& (!$theme->default_right_column || !$this->registerHook('rightColumn'))
-		)
+			&& (!$theme->default_right_column || !$this->registerHook('rightColumn')))
 		{
 			// If there are no colums implemented by the template, throw an error and uninstall the module
 			$this->_errors[] = $this->l('This module needs to be hooked to a column, but your theme does not implement one');
@@ -105,22 +105,21 @@ class BlockLink extends Module
 			!Db::getInstance()->execute('DROP TABLE '._DB_PREFIX_.'blocklink_lang') ||
 			!Db::getInstance()->execute('DROP TABLE '._DB_PREFIX_.'blocklink_shop') ||
 			!Configuration::deleteByName('PS_BLOCKLINK_TITLE') ||
-			!Configuration::deleteByName('PS_BLOCKLINK_URL')
-		)
+			!Configuration::deleteByName('PS_BLOCKLINK_URL'))
 			return false;
 
 		return true;
 	}
 
-	public function hookLeftColumn($params)
+	public function hookLeftColumn()
 	{
 		$links = $this->getLinks();
 
 		$this->smarty->assign(array(
 			'blocklink_links' => $links,
-			'title' => Configuration::get('PS_BLOCKLINK_TITLE', $this->context->language->id),
-			'url' => Configuration::get('PS_BLOCKLINK_URL'),
-			'lang' => 'text_'.$this->context->language->id
+			'title' => Configuration::get('PS_BLOCKLINK_TITLE', (int)$this->context->language->id),
+			'url' => Configuration::get('PS_BLOCKLINK_URL', (int)$this->context->language->id),
+			'lang' => 'text_'.(int)$this->context->language->id
 		));
 		if (!$links)
 			return false;
@@ -128,12 +127,12 @@ class BlockLink extends Module
 		return $this->display(__FILE__, 'blocklink.tpl');
 	}
 
-	public function hookRightColumn($params)
+	public function hookRightColumn()
 	{
-		return $this->hookLeftColumn($params);
+		return $this->hookLeftColumn();
 	}
 
-	public function hookHeader($params)
+	public function hookHeader()
 	{
 		$this->context->controller->addCSS($this->_path.'blocklink.css', 'all');
 	}
@@ -147,18 +146,21 @@ class BlockLink extends Module
 	{
 		if ((int)$id > 0)
 		{
-			$sql = 'SELECT b.`id_blocklink`, b.`url`, b.`new_window` FROM `'._DB_PREFIX_.'blocklink` b WHERE b.id_blocklink='.(int)$id;
+			$sql = 'SELECT b.`id_blocklink`, b.`new_window` FROM `'._DB_PREFIX_.'blocklink` b WHERE b.id_blocklink='.(int)$id;
 
 			if (!$results = Db::getInstance()->getRow($sql))
 				return false;
 
 				$link['id_blocklink'] = $results['id_blocklink'];
-				$link['url'] = $results['url'];
 				$link['newWindow'] = $results['new_window'];
 
-			$results_lang = Db::getInstance()->executeS('SELECT `id_lang`, `text` FROM '._DB_PREFIX_.'blocklink_lang WHERE `id_blocklink`='.(int)$link['id_blocklink']);
+			$results_lang = Db::getInstance()->executeS('SELECT `id_lang`, `text`, `url` 
+														 FROM '._DB_PREFIX_.'blocklink_lang WHERE `id_blocklink`='.(int)$link['id_blocklink']);
 			foreach ($results_lang as $result_lang)
-				$link['text'][$result_lang['id_lang']] = $result_lang['text'];
+			{
+				$link['text'][(int)$result_lang['id_lang']] = $result_lang['text'];
+				$link['url'][(int)$result_lang['id_lang']] = $result_lang['url'];
+			}
 			return $link;
 		}
 
@@ -168,9 +170,9 @@ class BlockLink extends Module
 	public function getLinks()
 	{
 		$result = array();
-		// Get id and url
+		// Get id
 
-		$sql = 'SELECT b.`id_blocklink`, b.`url`, b.`new_window`
+		$sql = 'SELECT b.`id_blocklink`, b.`new_window`
 				FROM `'._DB_PREFIX_.'blocklink` b';
 		if (Shop::isFeatureActive() && Shop::getContext() != Shop::CONTEXT_ALL)
 			$sql .= ' JOIN `'._DB_PREFIX_.'blocklink_shop` bs ON b.`id_blocklink` = bs.`id_blocklink` AND bs.`id_shop` IN ('.implode(', ', Shop::getContextListShopID()).') ';
@@ -182,21 +184,21 @@ class BlockLink extends Module
 		$i = 0;
 		foreach ($links as $link)
 		{
-			$result[$i]['id'] = $link['id_blocklink'];
-			$result[$i]['url'] = $link['url'];
+			$result[$i]['id'] = (int)$link['id_blocklink'];
 			$result[$i]['newWindow'] = $link['new_window'];
-			// Get multilingual text
+			// Get multilingual text and url
 
 			if (!$texts = Db::getInstance()->executeS('
-					SELECT `id_lang`, `text`
+					SELECT `id_lang`, `text`, `url`
 					FROM '._DB_PREFIX_.'blocklink_lang
-					WHERE `id_blocklink`='.(int)$link['id_blocklink']
-				)
-			)
+					WHERE `id_blocklink`='.(int)$link['id_blocklink']))
 				return false;
 
 			foreach ($texts as $text)
-				$result[$i]['text_'.$text['id_lang']] = $text['text'];
+			{
+				$result[$i]['text_'.(int)$text['id_lang']] = $text['text'];
+				$result[$i]['url_'.(int)$text['id_lang']] = $text['url'];
+			}
 
 			$i++;
 		}
@@ -213,39 +215,41 @@ class BlockLink extends Module
 		if ((int)Tools::getValue('id_blocklink') > 0)
 		{
 			$id_link = (int)Tools::getValue('id_blocklink');
-			if (!Db::getInstance()->execute('UPDATE '._DB_PREFIX_.'blocklink SET `url` = \''.pSQL(Tools::getValue('url')).'\', `new_window` = '.pSQL((int)Tools::getValue('newWindow')).' WHERE `id_blocklink` = '.(int)$id_link))
+			if (!Db::getInstance()->execute('UPDATE '._DB_PREFIX_.'blocklink SET `new_window` = '.pSQL((int)Tools::getValue('newWindow')).'
+												WHERE `id_blocklink` = '.(int)$id_link))
 				return false;
 			if (!Db::getInstance()->execute('DELETE FROM '._DB_PREFIX_.'blocklink_lang WHERE `id_blocklink` = '.(int)$id_link))
 				return false;
 
 			foreach ($languages as $language)
-				if (!empty($_POST['text_'.$language['id_lang']]))
+				if (!empty($_POST['text_'.(int)$language['id_lang']]) && !empty($_POST['url_'.(int)$language['id_lang']]))
 				{
-					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang (`id_blocklink`, `id_lang`, `text`) VALUES ('.(int)$id_link.', '.(int)($language['id_lang']).', \''.pSQL($_POST['text_'.$language['id_lang']]).'\')'))
+					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang (`id_blocklink`, `id_lang`, `text`, `url`)
+														VALUES ('.(int)$id_link.', '.(int)($language['id_lang']).', \''.pSQL($_POST['text_'.(int)$language['id_lang']]).'\', \''.pSQL($_POST['url_'.(int)$language['id_lang']]).'\')'))
 						return false;
 				}
 				else
-					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang VALUES ('.(int)$id_link.', '.$language['id_lang'].', \''.pSQL($_POST['text_'.$id_lang_default]).'\')'))
+					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang
+														VALUES ('.(int)$id_link.', '.(int)$language['id_lang'].', \''.pSQL($_POST['text_'.(int)$id_lang_default]).'\', \''.pSQL($_POST['url_'.(int)$id_lang_default]).'\')'))
 						return false;
 		}
 		else
 		{
-			if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink (`id_blocklink`, `url`, `new_window`)
-														VALUES (NULL, \''.pSQL(Tools::getValue('url')).'\', '.((isset($_POST['newWindow']) && Tools::getValue('newWindow')) == 'on' ? 1 : 0).')') ||
-				!$id_link = Db::getInstance()->Insert_ID()
-			)
+			if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink (`id_blocklink`, `new_window`)
+														VALUES (NULL, '.((isset($_POST['newWindow']) && Tools::getValue('newWindow')) == 'on' ? 1 : 0).')') ||
+				!$id_link = Db::getInstance()->Insert_ID())
 				return false;
 
 			foreach ($languages as $language)
-				if (!empty($_POST['text_'.$language['id_lang']]))
+				if (!empty($_POST['text_'.(int)$language['id_lang']]) && !empty($_POST['url_'.(int)$language['id_lang']]))
 				{
-					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang (`id_blocklink`, `id_lang`, `text`)
-																VALUES ('.(int)$id_link.', '.(int)$language['id_lang'].', \''.pSQL(Tools::getValue('text_'.$language['id_lang'])).'\')')
-					)
+					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang (`id_blocklink`, `id_lang`, `text`, `url`)
+																VALUES ('.(int)$id_link.', '.(int)$language['id_lang'].', \''.pSQL(Tools::getValue('text_'.(int)$language['id_lang'])).'\', \''.pSQL(Tools::getValue('url_'.(int)$language['id_lang'])).'\')'))
 						return false;
 				}
 				else
-					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang (`id_blocklink`, `id_lang`, `text`) VALUES ('.(int)$id_link.', '.(int)($language['id_lang']).', \''.pSQL($_POST['text_'.$id_lang_default]).'\')'))
+					if (!Db::getInstance()->execute('INSERT INTO '._DB_PREFIX_.'blocklink_lang (`id_blocklink`, `id_lang`, `text`, `url`)
+														VALUES ('.(int)$id_link.', '.(int)$language['id_lang'].', \''.pSQL($_POST['text_'.(int)$id_lang_default]).'\', \''.pSQL($_POST['url_'.(int)$id_lang_default]).'\')'))
 						return false;
 		}
 
@@ -285,12 +289,16 @@ class BlockLink extends Module
 	{
 		$languages = Language::getLanguages();
 		$result = array();
+		$titles_urls = array();
 		foreach ($languages as $language)
-			$result[$language['id_lang']] = Tools::getValue('title_'.$language['id_lang']);
+		{
+			$result[(int)$language['id_lang']] = Tools::getValue('title_'.(int)$language['id_lang']);
+			$titles_urls[(int)$language['id_lang']] = Tools::getValue('title_url_'.(int)$language['id_lang']);
+		}
 		if (!Configuration::updateValue('PS_BLOCKLINK_TITLE', $result))
 			return false;
 
-		return Configuration::updateValue('PS_BLOCKLINK_URL', Tools::getValue('title_url'));
+		return Configuration::updateValue('PS_BLOCKLINK_URL', $titles_urls);
 	}
 
 	public function getContent()
@@ -300,9 +308,9 @@ class BlockLink extends Module
 		// Add a link
 		if (Tools::isSubmit('submitLinkAdd') /* || Tools::isSubmit('updateblocklink')*/)
 		{
-			if (empty($_POST['text_'.Configuration::get('PS_LANG_DEFAULT')]) || empty($_POST['url']))
+			if (empty($_POST['text_'.(int)Configuration::get('PS_LANG_DEFAULT')]) || empty($_POST['url_'.(int)Configuration::get('PS_LANG_DEFAULT')]))
 				$this->_html .= $this->displayError($this->l('You must fill in all fields.'));
-			elseif (!Validate::isUrl(str_replace('http://', '', $_POST['url'])))
+			elseif (!Validate::isUrl(str_replace('http://', '', $_POST['url_'.(int)Configuration::get('PS_LANG_DEFAULT')])))
 				$this->_html .= $this->displayError($this->l('Bad URL'));
 			else
 				if ($this->addLink())
@@ -314,11 +322,12 @@ class BlockLink extends Module
 		elseif (Tools::isSubmit('submitTitle'))
 		{
 
-			if (empty($_POST['title_'.Configuration::get('PS_LANG_DEFAULT')]))
+			if (empty($_POST['title_'.(int)Configuration::get('PS_LANG_DEFAULT')]))
 				$this->_html .= $this->displayError($this->l('"title" field cannot be empty.'));
-			elseif (!empty($_POST['title_url']) && !Validate::isUrl(str_replace('http://', '', $_POST['title_url'])))
-				$this->_html .= $this->displayError($this->l('The \'title\' field is invalid'));
-			elseif (!Validate::isGenericName($_POST['title_'.Configuration::get('PS_LANG_DEFAULT')]))
+			elseif (!empty($_POST['title_url_'.(int)Configuration::get('PS_LANG_DEFAULT')]) &&
+					!Validate::isUrl(str_replace('http://', '', $_POST['title_url_'.(int)Configuration::get('PS_LANG_DEFAULT')])))
+				$this->_html .= $this->displayError($this->l('The \'url\' field is invalid'));
+			elseif (!Validate::isGenericName($_POST['title_'.(int)Configuration::get('PS_LANG_DEFAULT')]))
 				$this->_html .= $this->displayError($this->l('The \'title\' field is invalid'));
 			elseif (!$this->updateTitle())
 				$this->_html .= $this->displayError($this->l('An error occurred during title updating.'));
@@ -337,7 +346,7 @@ class BlockLink extends Module
 
 		if (isset($_POST['submitOrderWay']))
 		{
-			if (Configuration::updateValue('PS_BLOCKLINK_ORDERWAY', (int)(Tools::getValue('orderWay'))))
+			if (Configuration::updateValue('PS_BLOCKLINK_ORDERWAY', (int)Tools::getValue('orderWay')))
 				$this->_html .= $this->displayConfirmation($this->l('Sort order updated'));
 			else
 				$this->_html .= $this->displayError($this->l('An error occurred during sort order set-up.'));
@@ -356,11 +365,11 @@ class BlockLink extends Module
 				'title' => $this->l('Link ID'),
 				'type' => 'text',
 			),
-			'text_'.$this->context->language->id => array(
+			'text_'.(int)$this->context->language->id => array(
 				'title' => $this->l('Link text'),
 				'type' => 'text',
 			),
-			'url' => array(
+			'url_'.(int)$this->context->language->id => array(
 				'title' => $this->l('URL'),
 				'type' => 'text',
 			),
@@ -407,6 +416,7 @@ class BlockLink extends Module
 						'type' => 'text',
 						'label' => $this->l('URL'),
 						'name' => 'url',
+						'lang' => true,
 					),
 					array(
 						'type' => 'switch',
@@ -461,6 +471,7 @@ class BlockLink extends Module
 						'type' => 'text',
 						'label' => $this->l('URL for the block\'s title'),
 						'name' => 'title_url',
+						'lang' => true,
 					),
 				),
 				'submit' => array(
@@ -519,7 +530,7 @@ class BlockLink extends Module
 		$helper->tpl_vars = array(
 			'fields_value' => $this->getConfigFieldsValues(),
 			'languages' => $this->context->controller->getLanguages(),
-			'id_language' => $this->context->language->id
+			'id_language' => (int)$this->context->language->id
 		);
 
 		return $helper->generateForm(array($fields_form_1, $fields_form_2, $fields_form_3));
@@ -529,19 +540,18 @@ class BlockLink extends Module
 	{
 		$fields_values = array(
 			'id_blocklink' => Tools::getValue('id_blocklink'),
-			'url' => Tools::getValue('url'),
 			'newWindow' => Tools::getValue('newWindow'),
 			'orderWay' => Tools::getValue('orderWay', Configuration::get('PS_BLOCKLINK_ORDERWAY')),
-			'title_url' => Tools::getValue('title_url', Configuration::get('PS_BLOCKLINK_URL')),
 		);
-
 
 		$languages = Language::getLanguages(false);
 
 		foreach ($languages as $lang)
 		{
-			$fields_values['text'][$lang['id_lang']] = Tools::getValue('text_'.(int)$lang['id_lang']);
-			$fields_values['title'][$lang['id_lang']] = Tools::getValue('title', Configuration::get('PS_BLOCKLINK_TITLE', $lang['id_lang']));
+			$fields_values['text'][(int)$lang['id_lang']] = Tools::getValue('text_'.(int)$lang['id_lang']);
+			$fields_values['url'][(int)$lang['id_lang']] = Tools::getValue('url_'.(int)$lang['id_lang']);
+			$fields_values['title'][(int)$lang['id_lang']] = Tools::getValue('title', Configuration::get('PS_BLOCKLINK_TITLE', (int)$lang['id_lang']));
+			$fields_values['title_url'][(int)$lang['id_lang']] = Tools::getValue('title_url', Configuration::get('PS_BLOCKLINK_URL', (int)$lang['id_lang']));
 		}
 
 		if (Tools::getIsset('updateblocklink') && (int)Tools::getValue('id') > 0)

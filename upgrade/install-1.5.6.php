@@ -1,4 +1,5 @@
-{*
+<?php
+/*
 * 2007-2014 PrestaShop
 *
 * NOTICE OF LICENSE
@@ -21,23 +22,24 @@
 *  @copyright  2007-2014 PrestaShop SA
 *  @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *  International Registered Trademark & Property of PrestaShop SA
-*}
+*/
 
-<!-- Block links module -->
-<div id="links_block_left" class="block">
-	<h4 class="title_block">
-	{if $url}
-		<a href="{$url|escape}" title="{$title|escape}">{$title|escape}</a>
-	{else}
-		{$title|escape}
-	{/if}
-	</h4>
-	<ul class="block_content bullet">
-	{foreach from=$blocklink_links item=blocklink_link}
-		{if isset($blocklink_link.$lang)} 
-			<li><a href="{$blocklink_link.url|escape}" title="{$blocklink_link.$lang|escape}" {if $blocklink_link.newWindow} onclick="window.open(this.href);return false;"{/if}>{$blocklink_link.$lang|escape}</a></li>
-		{/if}
-	{/foreach}
-	</ul>
-</div>
-<!-- /Block links module -->
+if (!defined('_PS_VERSION_'))
+	exit;
+
+function upgrade_module_1_5_6($object)
+{
+	if (!Db::getInstance()->execute('ALTER TABLE `'._DB_PREFIX_.'blocklink_lang` ADD `url` VARCHAR(254) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL;'))
+		return false;
+
+	//data copy from blocklink to blocklinklang
+	if (!Db::getInstance()->execute('UPDATE `'._DB_PREFIX_.'blocklink_lang` 
+										INNER JOIN `'._DB_PREFIX_.'blocklink` ON `'._DB_PREFIX_.'blocklink_lang`.`id_blocklink` = `'._DB_PREFIX_.'blocklink`.`id_blocklink`
+										SET  `'._DB_PREFIX_.'blocklink_lang`.`url` = `'._DB_PREFIX_.'blocklink`.`url`;'))
+		return false;
+
+	if (!Db::getInstance()->execute('ALTER TABLE `'._DB_PREFIX_.'blocklink` DROP `url`;'))
+		return false;
+
+	return true;
+}
