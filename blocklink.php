@@ -51,7 +51,7 @@ class BlockLink extends Module
 
 	public function install()
 	{
-		if (!parent::install() || !$this->registerHook('header') || !$this->registerHook('footer'))
+		if (!parent::install() || !$this->registerHook('header'))
 			return false;
 
 		$success = Configuration::updateValue('PS_BLOCKLINK_TITLE', array('1' => 'Block link', '2' => 'Bloc lien'));
