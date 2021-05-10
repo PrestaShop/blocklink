@@ -133,6 +133,26 @@ class BlockLink extends Module
 		return $this->hookLeftColumn($params);
 	}
 
+	public function hookDisplayTop($params)
+	{
+		return $this->hookLeftColumn($params);
+	}
+	
+	public function hookDisplayTopColumn($params)
+	{
+		return $this->hookLeftColumn($params);
+	}	
+	
+	public function hookDisplayNav($params)
+    {
+        return $this->hookLeftColumn($params);
+    }
+	
+	public function hookDisplayFooter($params)
+	{
+		return $this->hookLeftColumn($params);
+	}	
+
 	public function hookHeader($params)
 	{
 		$this->context->controller->addCSS($this->_path.'blocklink.css', 'all');
